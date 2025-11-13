@@ -1,215 +1,208 @@
-
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>날짜 계산기 & 바코드 생성기</title>
-<style>
-body {
-  font-family: 'Pretendard', 'Arial', sans-serif;
-  background: linear-gradient(120deg, #f0f4ff, #fefefe);
-  margin: 0;
-  padding: 0;
-  text-align: center;
-}
-header {
-  background-color: #3b82f6;
-  color: white;
-  padding: 15px 0;
-  font-size: 1.4rem;
-  font-weight: bold;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-nav {
-  display: flex;
-  justify-content: center;
-  margin: 20px 0;
-}
-nav button {
-  background-color: #e5e7eb;
-  border: none;
-  padding: 10px 20px;
-  margin: 0 5px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: 0.3s;
-}
-nav button.active {
-  background-color: #3b82f6;
-  color: white;
-}
-.container {
-  max-width: 480px;
-  margin: 0 auto;
-  background: white;
-  padding: 20px;
-  border-radius: 12px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-}
-section {
-  display: none;
-}
-section.active {
-  display: block;
-}
-input, select, button, textarea {
-  width: 100%;
-  margin-top: 8px;
-  padding: 10px;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  font-size: 1rem;
-}
-button.action {
-  background-color: #3b82f6;
-  color: white;
-  border: none;
-  font-weight: bold;
-  cursor: pointer;
-  transition: 0.2s;
-}
-button.action:hover {
-  background-color: #2563eb;
-}
-#preview-area {
-  margin-top: 15px;
-  padding: 10px;
-  border: 1px dashed #ccc;
-  border-radius: 8px;
-  min-height: 150px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
-  color: #888;
-}
-img.preview {
-  max-width: 100%;
-  border-radius: 8px;
-  margin-bottom: 10px;
-}
-.message {
-  color: #ef4444;
-  font-weight: bold;
-  margin-top: 8px;
-}
-.barcode-result {
-  margin-top: 10px;
-  font-weight: bold;
-  color: #16a34a;
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>날짜 계산기 & 바코드 생성기</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.1.1/dist/tesseract.min.js"></script>
+  <style>
+    body {
+      font-family: 'Pretendard', sans-serif;
+      background-color: #f2f2f2;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    h2 {
+      color: #333;
+    }
+    .toggle-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    button {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 15px;
+      cursor: pointer;
+      box-shadow: 1px 2px 4px rgba(0,0,0,0.2);
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    .section {
+      display: none;
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+      padding: 20px;
+      margin-top: 10px;
+    }
+    .active {
+      display: block;
+    }
+    input, select {
+      padding: 6px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      margin: 5px;
+    }
+    #preview {
+      width: 100%;
+      max-width: 400px;
+      height: 240px;
+      object-fit: contain;
+      border: 2px dashed #aaa;
+      background-color: #eee;
+      margin-top: 10px;
+    }
+    #barcodeList div {
+      background-color: #fafafa;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      margin: 8px auto;
+      width: 90%;
+    }
+    .message {
+      color: #888;
+      font-style: italic;
+    }
+  </style>
 </head>
 <body>
+  <h2>📅 날짜 계산기 & 📦 바코드 생성기</h2>
 
-<header>날짜 계산기 & 바코드 생성기</header>
-<nav>
-  <button class="active" onclick="showTab('dateTab', this)">날짜 계산기</button>
-  <button onclick="showTab('barcodeTab', this)">바코드 생성기</button>
-</nav>
+  <div class="toggle-buttons">
+    <button onclick="showSection('dateSection')">📅 날짜 계산기</button>
+    <button onclick="showSection('barcodeSection')">📦 바코드 생성기</button>
+  </div>
 
-<div class="container">
-  <section id="dateTab" class="active">
-    <h2>📅 날짜 계산기</h2>
-    <label>기준 날짜 선택:</label>
-    <input type="date" id="base-date">
-    <label>며칠 후?</label>
-    <input type="number" id="days" placeholder="예: 45">
-    <button class="action" onclick="calcDate()">계산하기</button>
-    <div id="date-result"></div>
-  </section>
+  <!-- 날짜 계산기 -->
+  <div id="dateSection" class="section active">
+    <h3>날짜 계산기</h3>
+    <input type="date" id="baseDate">
+    <br>
+    <input type="number" id="addDays" placeholder="일수 입력"> 일
+    <input type="number" id="addMonths" placeholder="월수 입력"> 월
+    <input type="number" id="addYears" placeholder="년수 입력"> 년
+    <br>
+    <button onclick="calculateDate()">계산하기</button>
+    <button onclick="getLastDay()">달 말일 확인</button>
+    <p id="result"></p>
+  </div>
 
-  <section id="barcodeTab">
-    <h2>📷 바코드 생성기 & 인식</h2>
-    <input type="file" accept="image/*" id="barcode-image" onchange="previewImage(event)">
-    <div id="preview-area">
-      <span>불러온 이미지가 없습니다.</span>
-    </div>
-    <button class="action" onclick="scanBarcode()">바코드 인식</button>
-    <div id="barcode-output" class="barcode-result"></div>
-    <div id="barcode-message" class="message"></div>
-    <button class="action" onclick="downloadBarcode()">저장된 바코드 다운로드</button>
-    <button class="action" onclick="clearBarcode()">저장된 바코드 삭제</button>
-  </section>
-</div>
+  <!-- 바코드 생성기 -->
+  <div id="barcodeSection" class="section">
+    <h3>바코드 생성기</h3>
+    <input type="file" accept="image/*" onchange="loadImage(event)">
+    <br>
+    <img id="preview" alt="불러온 이미지가 없습니다.">
+    <p id="ocrResult" class="message"></p>
 
-<script src="https://unpkg.com/jsqr"></script>
-<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
-<script>
-function showTab(tabId, btn) {
-  document.querySelectorAll('section').forEach(sec => sec.classList.remove('active'));
-  document.getElementById(tabId).classList.add('active');
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-}
+    <input type="text" id="manualCode" placeholder="바코드 번호 (자동 또는 수동 입력)">
+    <input type="text" id="company" placeholder="업체명">
+    <br>
+    <button onclick="generateBarcode()">바코드 생성</button>
+    <svg id="barcode"></svg>
 
-function calcDate() {
-  const baseDate = document.getElementById('base-date').value;
-  const days = parseInt(document.getElementById('days').value);
-  if (!baseDate || isNaN(days)) return alert('날짜와 일수를 모두 입력하세요.');
-  const d = new Date(baseDate);
-  d.setDate(d.getDate() + days);
-  document.getElementById('date-result').innerText = `${days}일 후는 ${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일입니다.`;
-}
+    <h4>📦 저장된 바코드 목록</h4>
+    <div id="barcodeList"></div>
+    <button onclick="downloadAll()">모두 다운로드</button>
+  </div>
 
-function previewImage(event) {
-  const file = event.target.files[0];
-  const area = document.getElementById('preview-area');
-  area.innerHTML = '';
-  if (!file) {
-    area.innerHTML = '<span>불러온 이미지가 없습니다.</span>';
-    return;
-  }
-  const img = document.createElement('img');
-  img.className = 'preview';
-  img.src = URL.createObjectURL(file);
-  area.appendChild(img);
-}
+  <script>
+    // -------------------- 토글 기능 --------------------
+    function showSection(id) {
+      document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
 
-async function scanBarcode() {
-  const imgEl = document.querySelector('#preview-area img');
-  const output = document.getElementById('barcode-output');
-  const msg = document.getElementById('barcode-message');
-  msg.innerText = '';
-  output.innerText = '';
+    // -------------------- 날짜 계산기 --------------------
+    function calculateDate() {
+      const base = new Date(document.getElementById('baseDate').value);
+      if (isNaN(base)) {
+        document.getElementById('result').innerText = "기준 날짜를 선택하세요.";
+        return;
+      }
+      let days = parseInt(document.getElementById('addDays').value) || 0;
+      let months = parseInt(document.getElementById('addMonths').value) || 0;
+      let years = parseInt(document.getElementById('addYears').value) || 0;
+      base.setFullYear(base.getFullYear() + years);
+      base.setMonth(base.getMonth() + months);
+      base.setDate(base.getDate() + days - 1);
+      document.getElementById('result').innerText = 
+        "결과 날짜: " + base.toISOString().split('T')[0];
+    }
 
-  if (!imgEl) {
-    msg.innerText = '불러온 이미지가 없습니다.';
-    return;
-  }
+    function getLastDay() {
+      const base = new Date(document.getElementById('baseDate').value);
+      if (isNaN(base)) {
+        document.getElementById('result').innerText = "기준 날짜를 선택하세요.";
+        return;
+      }
+      const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0);
+      document.getElementById('result').innerText =
+        `${base.getFullYear()}년 ${base.getMonth()+1}월의 마지막 날은 ${lastDay.getDate()}일입니다.`;
+    }
 
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  canvas.width = imgEl.naturalWidth;
-  canvas.height = imgEl.naturalHeight;
-  ctx.drawImage(imgEl, 0, 0);
-  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    // -------------------- 바코드 생성기 --------------------
+    let loadedImage = null;
 
-  const code = jsQR(imageData.data, canvas.width, canvas.height);
-  if (code) {
-    output.innerText = `인식된 코드: ${code.data}`;
-    localStorage.setItem('barcodeData', code.data);
-  } else {
-    msg.innerText = '바코드 확인이 필요합니다.';
-  }
-}
+    function loadImage(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const preview = document.getElementById('preview');
+        preview.src = e.target.result;
+        loadedImage = e.target.result;
+        document.getElementById('ocrResult').innerText = "이미지 인식 중...";
+        Tesseract.recognize(e.target.result, 'eng+kor').then(({ data: { text } }) => {
+          const cleanText = text.replace(/\s+/g, '');
+          if (cleanText.length > 0) {
+            document.getElementById('ocrResult').innerText = "읽은 바코드: " + cleanText;
+            document.getElementById('manualCode').value = cleanText;
+          } else {
+            document.getElementById('ocrResult').innerText = "바코드 확인이 필요합니다.";
+          }
+        }).catch(() => {
+          document.getElementById('ocrResult').innerText = "이미지를 읽을 수 없습니다.";
+        });
+      };
+      reader.readAsDataURL(file);
+    }
 
-function downloadBarcode() {
-  const data = localStorage.getItem('barcodeData');
-  if (!data) return alert('저장된 바코드가 없습니다.');
-  const blob = new Blob([data], { type: 'text/plain' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'barcode.txt';
-  a.click();
-}
+    function generateBarcode() {
+      const code = document.getElementById('manualCode').value.trim();
+      const company = document.getElementById('company').value.trim();
+      if (!code) {
+        alert("바코드 번호를 입력하세요.");
+        return;
+      }
+      JsBarcode("#barcode", code, { format: "CODE128", displayValue: true });
+      const barcodeList = document.getElementById('barcodeList');
+      const div = document.createElement('div');
+      div.innerHTML = `<strong>${company || '업체 미입력'}</strong><br>
+        <svg id="svg${Date.now()}"></svg><br>${code}`;
+      barcodeList.prepend(div);
+      JsBarcode(`#svg${Date.now()}`, code, { format: "CODE128", displayValue: true });
+    }
 
-function clearBarcode() {
-  localStorage.removeItem('barcodeData');
-  alert('저장된 바코드를 삭제했습니다.');
-}
-</script>
-
+    function downloadAll() {
+      const items = document.getElementById('barcodeList').innerHTML;
+      const blob = new Blob([items], { type: "text/html" });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = "barcodes.html";
+      a.click();
+    }
+  </script>
 </body>
 </html>
