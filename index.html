@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Index - Date & Barcode Manager</title>
+
+<!-- Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.18.6/umd/index.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js"></script>
+
+<style>
+  :root{--blue:#1976d2;--muted:#f4f4f4}
+  body{font-family:system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin:14px; color:#222; background:#fafafa}
+  h1{font-size:20px;margin:0 0 10px;text-align:center}
+  .card{background:#fff;border:1px solid #e6e6e6;padding:12px;margin:12px 0;border-radius:8px}
+  label{display:block;margin:8px 0 4px;font-weight:600}
+  input[type="text"], input[type="date"], input[type="number"], select, textarea {width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;box-sizing:border-box}
+  .row{display:flex;gap:8px}
+  .row> *{flex:1}
+  .preview-area{width:100%;height:250px;background:var(--muted);border:1px solid #ddd;border-radius:6px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .preview-area img{width:100%;height:100%;object-fit:contain;display:block}
+  button{padding:8px 12px;margin:8px 4px 0 0;border-radius:6px;border:none;background:var(--blue);color:#fff;cursor:pointer}
+  button.ghost{background:#777}
+  .small{font-size:13px;color:#555}
+  #barcodeCanvas{display:none}
+  .list-item{border-top:1px solid #eee;padding:10px;display:flex;gap:10px;align-items:center}
+  .list-item img{width:120px;height:auto;border:1px solid #ddd}
+  .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .control-inline{display:flex;gap:6px;align-items:center}
+  footer{text-align:center;color:#888;margin-top:14px}
+  .progress{font-size:13px;color:#0b69d0;margin-top:6px}
+  .btn-small{padding:6px 8px;font-size:13px;border-radius:6px}
+</style>
+</head>
+<body>
+<h1>날짜 계산기 & 바코드 매니저 (index)</h1>
+
+<div class="card">
+  <h2>1) 날짜 계산기</h2>
+  <label>기준 날짜</label>
+  <input type="date" id="baseDate">
+  <div class="row">
+    <input type="number" id="addDays" placeholder="일수">
+    <input type="number" id="addMonths" placeholder="달수">
+    <input type="number" id="addYears" placeholder="년수">
+  </div>
+  <button onclick="calcDate()">계산</button>
+  <p id="calcResult" class="small"></p>
+  <label style="margin-top:8px">해당 달의 마지막 날짜 (년/월)</label>
+  <div class="row">
+    <input type="number" id="checkYear" placeholder="년">
+    <input type="number" id="checkMonth" placeholder="월">
+  </div>
+  <button onclick="checkLast()">말일 확인</button>
+  <p id="lastResult" class="small"></p>
+</div>
+
+<div class="card">
+  <h2>2) 이미지 불러오기 → 전처리 → 인식 → 교정/생성</h2>
+
+  <div class="preview-area" id="previewArea">
+    <img id="preview" alt="미리보기">
+  </div>
+
+  <div style="text-align:center;margin-top:10px">
+    <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="onFileChange(event)">
+    <button onclick="document.getElementById('fileInput').click()">갤러리 열기</button>
+  </div>
+
+  <div class="controls">
+    <div class="control-inline"><label>자동 인식:</label><span id="autoResult">-</span></div>
+    <div class="control-inline"><label>OCR:</label><span id="ocrResult">-</span></div>
+    <div class="control-inline"><label>최종:</label><input type="text" id="finalCode" placeholder="자동 채움 또는 직접 입력" style="min-width:160px"></div>
+  </div>
+
+  <div class="controls">
+    <div class="control-inline"><label>업체명:</label><input type="text" id="companyName" placeholder="업체명 입력" style="min-width:200px"></div>
+    <div class="control-inline"><button onclick="createFromManual()">직접 생성</button></div>
+    <div class="control-inline"><button onclick="downloadGenerated()">생성 이미지 다운로드</button></div>
+  </div>
+
+  <div style="margin-top:8px">
+    <label>이미지 전처리 (자동 권장)</label>
+    <div class="controls">
+      <div class="control-inline"><label>명암:</label><input type="range" id="rangeContrast" min="-100" max="100" value="0" oninput="applyPreviewProcessing()"></div>
+      <div class="control-inline"><label>밝기:</label><input type="range" id="rangeBrightness" min="-100" max="100" value="0" oninput="applyPreviewProcessing()"></div>
+      <div class="control-inline"><label>이진 임계:</label><input type="range" id="rangeThreshold" min="0" max="255" value="0" oninput="applyPreviewProcessing()"></div>
+      <div class="control-inline"><button class="ghost" onclick="resetProcessing()">전처리 초기화</button></div>
+    </div>
+    <div class="progress" id="progressLog"></div>
+  </div>
+
+  <div style="margin-top:10px" class="row">
+    <button onclick="retryRecognize()">다시 인식</button>
+    <button class="ghost" onclick="clearPreview()">초기화</button>
+    <button onclick="saveEntry()">저장 (이미지+번호+업체명)</button>
+  </div>
+
+  <canvas id="processingCanvas" style="display:none"></canvas>
+  <canvas id="barcodeCanvas" style="display:none"></canvas>
+</div>
+
+<div class="card">
+  <h2>3) 저장된 바코드 목록</h2>
+  <div id="list"></div>
+  <div style="margin-top:8px">
+    <button onclick="downloadAllBarcodes()">모두 다운로드 (연속 PNG)</button>
+    <button class="ghost" onclick="clearAll()">전체 삭제</button>
+  </div>
+</div>
+
+<footer>Designed by TSKIM_QC</footer>
+
+<script>
+/* Globals */
+const fileInput = document.getElementById('fileInput');
+const preview = document.getElementById('preview');
+const processingCanvas = document.getElementById('processingCanvas');
+const processingCtx = processingCanvas.getContext('2d');
+const barcodeCanvas = document.getElementById('barcodeCanvas');
+const barcodeCtx = barcodeCanvas.getContext('2d');
+
+const autoResultEl = document.getElementById('autoResult');
+const ocrResultEl = document.getElementById('ocrResult');
+const finalCodeEl = document.getElementById('finalCode');
+const companyEl = document.getElementById('companyName');
+const progressLog = document.getElementById('progressLog');
+
+let saved = JSON.parse(localStorage.getItem('barcode_v6_saved') || '[]');
+
+/* ZXing setup */
+const hints = new Map();
+hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+  ZXing.BarcodeFormat.CODE_128,
+  ZXing.BarcodeFormat.CODE_39,
+  ZXing.BarcodeFormat.EAN_13,
+  ZXing.BarcodeFormat.UPC_A,
+  ZXing.BarcodeFormat.QR_CODE
+]);
+const reader = new ZXing.BrowserMultiFormatReader(hints);
+
+/* Tesseract worker reuse (v2 API) */
+let tessWorker = null;
+async function getTessWorker(){
+  if(tessWorker) return tessWorker;
+  progressLog.textContent = 'Tesseract 초기화...';
+  tessWorker = Tesseract.createWorker({
+    logger: m => {
+      if(m && m.status) progressLog.textContent = `OCR: ${m.status} ${Math.round((m.progress||0)*100)}%`;
+      console.log('tess:', m);
+    }
+  });
+  await tessWorker.load();
+  await tessWorker.loadLanguage('eng');
+  await tessWorker.initialize('eng');
+  progressLog.textContent = 'Tesseract 준비 완료';
+  return tessWorker;
+}
+
+/* Date functions */
+function calcDate(){
+  const baseVal = document.getElementById('baseDate').value;
+  if(!baseVal) return alert('기준 날짜를 선택하세요.');
+  const d = new Date(baseVal + 'T00:00:00');
+  const days = parseInt(document.getElementById('addDays').value) || 0;
+  const months = parseInt(document.getElementById('addMonths').value) || 0;
+  const years = parseInt(document.getElementById('addYears').value) || 0;
+  d.setFullYear(d.getFullYear() + years);
+  d.setMonth(d.getMonth() + months);
+  d.setDate(d.getDate() + days - 1);
+  document.getElementById('calcResult').textContent = '결과 날짜: ' + d.toISOString().slice(0,10);
+}
+function checkLast(){
+  const y = parseInt(document.getElementById('checkYear').value);
+  const m = parseInt(document.getElementById('checkMonth').value);
+  if(isNaN(y) || isNaN(m)) return alert('년과 월을 입력하세요.');
+  const last = new Date(y, m, 0).getDate();
+  document.getElementById('lastResult').textContent = `${y}년 ${m}월은 ${last}일까지 있습니다.`;
+}
+
+/* Image load & processing */
+let currentImageURL = '';
+let lastProcessedDataURL = '';
+
+async function onFileChange(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  currentImageURL = URL.createObjectURL(file);
+  preview.src = currentImageURL;
+  progressLog.textContent = '이미지 로드됨. 전처리 및 인식 시작...';
+  autoResultEl.textContent = '-';
+  ocrResultEl.textContent = '-';
+  finalCodeEl.value = '';
+  await new Promise(res => preview.onload = res);
+  resetProcessingValues();
+  applyPreviewProcessing();
+  await recognizePipeline();
+}
+
+function resetProcessingValues(){
+  const rc = document.getElementById('rangeContrast');
+  const rb = document.getElementById('rangeBrightness');
+  const rt = document.getElementById('rangeThreshold');
+  if(rc) rc.value = 0;
+  if(rb) rb.value = 0;
+  if(rt) rt.value = 0;
+}
+
+function applyPreviewProcessing(){
+  if(!preview.src) return;
+  const iw = preview.naturalWidth || preview.width;
+  const ih = preview.naturalHeight || preview.height;
+  processingCanvas.width = iw;
+  processingCanvas.height = ih;
+  processingCtx.drawImage(preview,0,0,iw,ih);
+  let imgData = processingCtx.getImageData(0,0,iw,ih);
+  const contrastEl = document.getElementById('rangeContrast');
+  const brightnessEl = document.getElementById('rangeBrightness');
+  const thresholdEl = document.getElementById('rangeThreshold');
+  const contrast = contrastEl ? parseInt(contrastEl.value) : 0;
+  const brightness = brightnessEl ? parseInt(brightnessEl.value) : 0;
+  const threshold = thresholdEl ? parseInt(thresholdEl.value) : 0;
+  // contrast & brightness
+  const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+  for(let i=0;i<imgData.data.length;i+=4){
+    imgData.data[i] = clamp(factor * (imgData.data[i] - 128) + 128 + brightness,0,255);
+    imgData.data[i+1] = clamp(factor * (imgData.data[i+1] - 128) + 128 + brightness,0,255);
+    imgData.data[i+2] = clamp(factor * (imgData.data[i+2] - 128) + 128 + brightness,0,255);
+  }
+  if(threshold > 0){
+    for(let i=0;i<imgData.data.length;i+=4){
+      const v = Math.round(0.299*imgData.data[i] + 0.587*imgData.data[i+1] + 0.114*imgData.data[i+2]);
+      const val = v > threshold ? 255 : 0;
+      imgData.data[i]=imgData.data[i+1]=imgData.data[i+2]=val;
+    }
+  }
+  processingCtx.putImageData(imgData,0,0);
+  const dataUrl = processingCanvas.toDataURL('image/png');
+  preview.src = dataUrl;
+  lastProcessedDataURL = dataUrl;
+}
+
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+
+/* Recognition pipeline */
+async function recognizePipeline(){
+  autoResultEl.textContent = '-';
+  ocrResultEl.textContent = '-';
+  finalCodeEl.value = '';
+  progressLog.textContent = '인식 파이프라인 시작...';
+  if(!lastProcessedDataURL){
+    processingCanvas.width = preview.naturalWidth;
+    processingCanvas.height = preview.naturalHeight;
+    processingCtx.drawImage(preview,0,0);
+    lastProcessedDataURL = processingCanvas.toDataURL('image/png');
+  }
+  // ZXing decode
+  let zxingText = '';
+  try{
+    const luminanceSource = new ZXing.HTMLCanvasElementLuminanceSource(processingCanvas);
+    const binaryBitmap = new ZXing.BinaryBitmap(new ZXing.HybridBinarizer(luminanceSource));
+    const result = reader.decode(binaryBitmap);
+    if(result && result.getText) zxingText = result.getText();
+    console.log('ZXing:', zxingText);
+  }catch(e){
+    console.warn('ZXing failed', e);
+    zxingText = '';
+  }
+  if(zxingText) autoResultEl.textContent = zxingText; else autoResultEl.textContent = '';
+  // OCR via Tesseract worker
+  try{
+    progressLog.textContent = 'OCR 실행...';
+    const worker = await getTessWorker();
+    const blob = await new Promise(res => processingCanvas.toBlob(res, 'image/png'));
+    const { data: { text } } = await worker.recognize(blob);
+    const cleaned = (text.match(/[0-9A-Za-z\-]+/g) || []).join('');
+    console.log('Tesseract raw:', text, 'cleaned:', cleaned);
+    if(cleaned.length>=2) ocrResultEl.textContent = cleaned; else ocrResultEl.textContent = '';
+  }catch(err){
+    console.error('OCR error', err);
+    ocrResultEl.textContent = '';
+  }
+  decideFinalAndNotify();
+  progressLog.textContent = '인식 완료';
+}
+
+/* Decide final */
+function decideFinalAndNotify(){
+  const auto = (autoResultEl.textContent||'').trim();
+  const ocr = (ocrResultEl.textContent||'').trim();
+  if(auto && ocr){
+    if(auto === ocr){
+      finalCodeEl.value = auto;
+      progressLog.textContent = '자동 인식과 OCR 일치';
+    } else {
+      finalCodeEl.value = ocr || auto;
+      progressLog.textContent = '자동 인식과 OCR 불일치 — 교정 필요';
+    }
+  } else if(auto){
+    finalCodeEl.value = auto;
+    progressLog.textContent = '자동 바코드 인식 결과';
+  } else if(ocr){
+    finalCodeEl.value = ocr;
+    progressLog.textContent = 'OCR 결과 사용';
+  } else {
+    finalCodeEl.value = '';
+    progressLog.textContent = '인식 실패';
+  }
+}
+
+/* Manual create & download */
+function createFromManual(){
+  const val = finalCodeEl.value.trim();
+  if(!val) return alert('생성할 코드가 없습니다.');
+  JsBarcode(barcodeCanvas, val, { format: "CODE128", displayValue: true, fontSize:14, width:2, height:60 });
+  const dataUrl = barcodeCanvas.toDataURL('image/png');
+  preview.src = dataUrl;
+  lastProcessedDataURL = dataUrl;
+  progressLog.textContent = '바코드 생성 완료';
+}
+function downloadGenerated(){
+  const val = finalCodeEl.value.trim();
+  if(!val) return alert('다운로드할 코드가 없습니다.');
+  JsBarcode(barcodeCanvas, val, { format: "CODE128", displayValue: true, fontSize:14, width:2, height:60 });
+  const url = barcodeCanvas.toDataURL('image/png');
+  const a = document.createElement('a');
+  a.href = url; a.download = `barcode_${val}.png`; document.body.appendChild(a); a.click(); a.remove();
+}
+
+/* Save / list / per-item download & delete */
+function saveEntry(){
+  const code = finalCodeEl.value.trim();
+  const comp = companyEl.value.trim();
+  const img = preview.src || '';
+  if(!code) return alert('최종 바코드 번호가 비어 있습니다.');
+  if(!comp) return alert('업체명을 입력하세요.');
+  const item = { id:'id'+Date.now(), code, comp, img };
+  saved.unshift(item);
+  localStorage.setItem('barcode_v6_saved', JSON.stringify(saved));
+  renderList();
+  clearPreview();
+  progressLog.textContent = '저장되었습니다.';
+}
+function renderList(){
+  const list = document.getElementById('list');
+  list.innerHTML = '';
+  saved.forEach(it=>{
+    const div = document.createElement('div'); div.className='list-item';
+    div.innerHTML = `<img src="${it.img}" alt="img"><div style="flex:1"><div><b>업체:</b> ${escapeHtml(it.comp)}</div><div><b>코드:</b> ${escapeHtml(it.code)}</div></div>
+    <div style="display:flex;flex-direction:column;gap:6px">
+      <button class="btn-small" onclick="downloadItem('${it.id}')">다운로드</button>
+      <button class="btn-small ghost" onclick="deleteItem('${it.id}')">삭제</button>
+    </div>`;
+    list.appendChild(div);
+  });
+}
+function downloadItem(id){
+  const it = saved.find(x=>x.id===id);
+  if(!it) return alert('항목을 찾을 수 없습니다.');
+  const a = document.createElement('a');
+  a.href = it.img;
+  a.download = `barcode_${it.code}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+function deleteItem(id){
+  if(!confirm('삭제하시겠습니까?')) return;
+  saved = saved.filter(x=>x.id !== id);
+  localStorage.setItem('barcode_v6_saved', JSON.stringify(saved));
+  renderList();
+}
+function downloadAllBarcodes(){
+  if(!saved.length) return alert('저장된 항목이 없습니다.');
+  (async ()=>{
+    for(const it of saved){
+      const a = document.createElement('a');
+      a.href = it.img;
+      a.download = `barcode_${it.code}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      await new Promise(r=>setTimeout(r,200));
+    }
+  })();
+}
+function clearAll(){
+  if(!confirm('모든 항목을 삭제하시겠습니까?')) return;
+  saved = [];
+  localStorage.removeItem('barcode_v6_saved');
+  renderList();
+}
+
+/* helpers */
+function retryRecognize(){ if(preview.src) recognizePipeline(); }
+function clearPreview(){ preview.src=''; document.getElementById('fileInput').value=''; autoResultEl.textContent='-'; ocrResultEl.textContent='-'; finalCodeEl.value=''; companyEl.value=''; progressLog.textContent=''; lastProcessedDataURL=''; }
+function escapeHtml(s){ if(!s) return ''; return s.replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* init */
+renderList();
+
+</script>
+</body>
+</html>
